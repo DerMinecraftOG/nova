@@ -118,6 +118,22 @@ footer { padding: 18px 20px; color: var(--muted); font-size: 11px; line-height: 
   .sidebar .side-text { display: none; }
   .rightbar { display: none; }
 }
+
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: #1d9bf0;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  vertical-align: middle;
+}
+
 @media (max-width: 600px) {
   .layout { display: block; padding-bottom: 64px; }
   .sidebar { display: none; }
@@ -183,6 +199,12 @@ footer { padding: 18px 20px; color: var(--muted); font-size: 11px; line-height: 
           <button class="btn secondary" id="switchAuth" type="button">Ich habe ein Konto</button>
         </div>
       </form>
+
+
+        <span class="username">
+        NovaUser
+        <span class="verified-badge" title="Verifiziert">✓</span>
+        </span>
 
       <!-- NEU: Passwort zurücksetzen -->
       <button
