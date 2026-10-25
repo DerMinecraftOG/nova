@@ -340,6 +340,24 @@ function renderUsername(profile) {
   return name;
 }
 
+
+
+function renderUsername(profile) {
+  const name = document.createElement('span');
+  name.className = 'username';
+  name.textContent = profile.username || 'Unbekannt';
+
+  if (profile.verified === true) {
+    const badge = document.createElement('span');
+    badge.className = 'verified-badge';
+    badge.textContent = '✓';
+    badge.title = 'Verifiziert';
+    name.appendChild(badge);
+  }
+
+  return name;
+}
+
 function formatDate(value) {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? '' :
