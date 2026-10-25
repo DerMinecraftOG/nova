@@ -325,20 +325,6 @@ function setAuthUI() {
     : 'Melde dich an, um etwas zu posten.');
 }
 
-function renderUsername(profile) {
-  const name = document.createElement("span");
-  name.textContent = profile.username || "Unbekannt";
-
-  if (profile.verified) {
-    const badge = document.createElement("span");
-    badge.className = "verified-badge";
-    badge.textContent = "✓";
-    badge.title = "Verifizierter Benutzer";
-    name.appendChild(badge);
-  }
-
-  return name;
-}
 
 
 
