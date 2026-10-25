@@ -411,6 +411,27 @@ $('postForm').addEventListener('submit', async e => {
 $('reload').addEventListener('click', () => route === 'profile' ? loadProfilePage(routeValue) : loadFeed());
 window.addEventListener('hashchange', setRoute);
 
+
+function renderUsername(profile) {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'username';
+
+  const name = document.createElement('span');
+  name.textContent = profile.username || 'Unbekannt';
+  wrapper.appendChild(name);
+
+  if (profile.verified === true) {
+    const badge = document.createElement('span');
+    badge.className = 'verified-badge';
+    badge.textContent = '✓';
+    badge.title = 'Verifiziert';
+    badge.setAttribute('aria-label', 'Verifiziert');
+    wrapper.appendChild(badge);
+  }
+
+  return wrapper;
+}
+
 async function start() {
   if (!db) {
     $('feedStatus').textContent = 'Setup nötig: Supabase Project URL und Publishable Key in app.js eintragen.';
