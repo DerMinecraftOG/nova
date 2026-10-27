@@ -1,685 +1,110 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#08090d">
-<title>Nova — Social</title>
-<meta name="description" content="Deine Community. Deine Stimme.">
-
-<style>
-:root {
-  color-scheme: dark;
-  --bg: #08090d;
-  --panel: #101219;
-  --line: #242631;
-  --text: #f3f4f8;
-  --muted: #9095a5;
-  --accent: #a78bfa;
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0; background: var(--bg); color: var(--text);
-  font-family: Inter, system-ui, -apple-system, sans-serif;
-}
-button, input, textarea { font: inherit; }
-button { cursor: pointer; }
-button:disabled { opacity: .5; cursor: wait; }
-a { color: inherit; text-decoration: none; }
-.layout {
-  width: min(100%, 1240px); margin: auto;
-  display: grid; grid-template-columns: 235px minmax(0, 620px) 280px;
-  min-height: 100vh;
-}
-.sidebar {
-  padding: 25px 18px; border-right: 1px solid var(--line);
-  position: sticky; top: 0; height: 100vh;
-  display: flex; flex-direction: column; gap: 25px;
-}
-.logo { font-size: 29px; font-weight: 900; letter-spacing: -1.5px; }
-.logo span { color: var(--accent); }
-.nav { display: grid; gap: 8px; }
-.nav a {
-  padding: 13px; border-radius: 12px; color: #c7c9d4;
-}
-.nav a:hover, .nav a.active { background: #a78bfa17; color: white; }
-main { min-width: 0; border-right: 1px solid var(--line); }
-.topbar {
-  padding: 18px 20px; border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; z-index: 3;
-  background: #08090deF; backdrop-filter: blur(16px);
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-}
-.topbar h1 { font-size: 20px; margin: 0; }
-.sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
-.panel { padding: 18px 20px; border-bottom: 1px solid var(--line); }
-h2 { font-size: 17px; margin: 0 0 14px; }
-input, textarea {
-  width: 100%; background: #0b0d13; color: white;
-  border: 1px solid var(--line); border-radius: 10px;
-  padding: 12px; outline: none; margin-bottom: 10px;
-}
-input:focus, textarea:focus { border-color: var(--accent); }
-textarea { min-height: 95px; resize: vertical; }
-.btn {
-  background: var(--accent); color: #151020; font-weight: 800;
-  border: 0; border-radius: 999px; padding: 10px 17px;
-}
-.btn:hover { filter: brightness(1.1); }
-.btn.secondary {
-  background: #20222d; color: white; border: 1px solid var(--line);
-}
-
-
-.verified-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-left: 4px;
-  border-radius: 50%;
-  background: #1d9bf0;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  vertical-align: middle;
-  flex-shrink: 0;
-}
-
-
-
-
-.btn.small { padding: 7px 12px; font-size: 12px; }
-.compose-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-}
-.status { color: var(--muted); font-size: 12px; line-height: 1.5; }
-.post { padding: 19px 20px; border-bottom: 1px solid var(--line); }
-.post:hover { background: #ffffff03; }
-.post-head { display: flex; align-items: center; gap: 10px; }
-.avatar {
-  width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%;
-  display: grid; place-items: center; background: #30254b;
-  color: #d5c5ff; font-weight: 850;
-}
-.post-meta { min-width: 0; overflow-wrap: anywhere; }
-.username { font-weight: 750; font-size: 14px; }
-.date { color: var(--muted); font-size: 12px; margin-top: 3px; }
-.post-content {
-  margin: 13px 0 15px 52px; white-space: pre-wrap;
-  overflow-wrap: anywhere; line-height: 1.7; font-size: 14px;
-}
-.post-actions { margin-left: 52px; display: flex; align-items: center; gap: 12px; }
-.action {
-  background: transparent; color: var(--muted); border: 0;
-  padding: 6px 8px; border-radius: 8px; font-size: 13px;
-}
-.action:hover { background: #ffffff0a; color: white; }
-.action.liked { color: #fb7185; }
-.action.delete { margin-left: auto; }
-.rightbar { padding: 22px 16px; }
-.box {
-  border: 1px solid var(--line); background: var(--panel);
-  border-radius: 17px; padding: 17px; margin-bottom: 16px;
-}
-.box p { color: var(--muted); font-size: 13px; line-height: 1.7; }
-.box h2 { margin-bottom: 8px; }
-#feedStatus { padding: 22px; color: var(--muted); font-size: 13px; }
-.hidden { display: none !important; }
-footer { padding: 18px 20px; color: var(--muted); font-size: 11px; line-height: 1.8; }
-.mobile-logo { display: none; }
-
-@media (max-width: 1000px) {
-  .layout { grid-template-columns: 76px minmax(0, 620px); justify-content: center; }
-  .sidebar { align-items: center; padding: 20px 8px; }
-  .nav a { font-size: 0; text-align: center; width: 52px; }
-  .nav a .symbol { font-size: 22px; }
-  .sidebar .side-text { display: none; }
-  .rightbar { display: none; }
-}
-
-.verified-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-left: 4px;
-  border-radius: 50%;
-  background: #1d9bf0;
-  color: #fff;
-  font-size: 11px;
-  font-weight: bold;
-  vertical-align: middle;
-}
-
-@media (max-width: 600px) {
-  .layout { display: block; padding-bottom: 64px; }
-  .sidebar { display: none; }
-  main { border-right: 0; }
-  .topbar { padding: 14px 16px; }
-  .mobile-logo { display: inline; font-weight: 900; font-size: 22px; }
-  .panel { padding: 16px; }
-  .post { padding: 16px; }
-  .post-content, .post-actions { margin-left: 0; }
-  .post-content { margin-top: 12px; }
-  .bottom-nav {
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
-    display: flex; justify-content: space-around; padding: 10px 5px;
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
-    background: #0b0c12f5; border-top: 1px solid var(--line);
-    backdrop-filter: blur(18px);
-  }
-  .bottom-nav a { text-align: center; font-size: 21px; min-width: 44px; }
-  .bottom-nav a span { display: block; font-size: 10px; color: var(--muted); }
-}
-@media (min-width: 601px) { .bottom-nav { display: none; } }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08090d">
+  <title>Nova – Social</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
-<div class="layout">
-  <aside class="sidebar">
-    <a href="#" class="logo">nova<span>.</span></a>
-    <nav class="nav">
-      <a class="active" href="#home"><span class="symbol">⌂</span><span class="side-text"> &nbsp; Startseite</span></a>
-      <a href="#compose"><span class="symbol">✎</span><span class="side-text"> &nbsp; Beitrag schreiben</span></a>
-      <a href="#account"><span class="symbol">◎</span><span class="side-text"> &nbsp; Mein Konto</span></a>
-    </nav>
-    <div style="margin-top:auto">
-      <div id="sideAccount" class="status">Nicht angemeldet</div>
-    </div>
-  </aside>
-
-  <main id="home">
-    <header class="topbar">
-      <div>
-        <span class="mobile-logo">nova<span style="color:var(--accent)">.</span></span>
-        <h1 style="display:inline">Für dich</h1>
-        <div class="sub">Deine Community in Echtzeit*</div>
-      </div>
-      <button id="reload" class="btn secondary small" type="button">↻ Aktualisieren</button>
-    </header>
-
-    <section class="panel" id="account">
-      <h2 id="authHeading">Willkommen bei Nova</h2>
-      <p class="status" id="authStatus">Melde dich an oder erstelle ein Konto.</p>
-
-      <form id="authForm">
-        <input id="username" placeholder="Benutzername (bei Registrierung)" maxlength="24"
-          autocomplete="username" minlength="3">
-        <input id="email" type="email" placeholder="E-Mail-Adresse"
-          autocomplete="email" required>
-        <input id="password" type="password" placeholder="Passwort (mind. 8 Zeichen)"
-          autocomplete="current-password" minlength="8" required>
-
-        <div class="compose-row">
-          <button class="btn" id="authSubmit" type="submit">Registrieren</button>
-          <button class="btn secondary" id="switchAuth" type="button">Ich habe ein Konto</button>
-        </div>
-      </form>
-
-
-        <span class="username">
-        NovaUser
-        <span class="verified-badge" title="Verifiziert">✓</span>
-        </span>
-
-      <!-- NEU: Passwort zurücksetzen -->
-      <button
-        id="forgotPassword"
-        class="btn secondary"
-        type="button"
-        style="margin-top:12px;width:100%"
-      >
-        Passwort vergessen?
-      </button>
-
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="logo" href="#home">nova<span>.</span></a>
+      <nav class="nav">
+        <a href="#home" data-route="home"><span class="symbol">⌂</span><span class="side-text">Startseite</span></a>
+        <a href="#account" data-route="account"><span class="symbol">◉</span><span class="side-text">Mein Konto</span></a>
+      </nav>
+      <div id="sideAccount" class="side-account">Nicht angemeldet</div>
       <button id="logout" class="btn secondary hidden" type="button">Abmelden</button>
-    </section>
+    </aside>
 
-    <section class="panel" id="compose">
-      <h2>Was gibt's Neues?</h2>
-      <form id="postForm">
-        <textarea id="postText" maxlength="280" placeholder="Was möchtest du teilen? (max. 280 Zeichen)" required disabled></textarea>
-        <div class="compose-row">
-          <span id="charCount" class="status">0 / 280</span>
-          <button class="btn" id="postSubmit" type="submit" disabled>Posten ↗</button>
+    <main>
+      <header class="topbar">
+        <a class="mobile-logo logo" href="#home">nova<span>.</span></a>
+        <h1 id="pageTitle">Für dich</h1>
+        <button id="reload" class="btn secondary small" type="button">Neu laden</button>
+      </header>
+
+      <section id="authPanel" class="panel">
+        <h2 id="authHeading">Willkommen bei Nova</h2>
+        <form id="authForm">
+          <input id="username" placeholder="Benutzername (3–24 Zeichen)" minlength="3" maxlength="24" autocomplete="username">
+          <input id="email" type="email" placeholder="E-Mail-Adresse" required autocomplete="email">
+          <input id="password" type="password" placeholder="Passwort" required minlength="6" autocomplete="new-password">
+          <div class="row wrap">
+            <button id="authSubmit" class="btn" type="submit">Registrieren</button>
+            <button id="switchAuth" class="btn secondary" type="button">Ich habe ein Konto</button>
+            <button id="forgot-password" class="text-button" type="button">Passwort vergessen?</button>
+          </div>
+          <p id="authStatus" class="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section id="feedSection">
+        <section id="composer" class="panel hidden">
+          <h2>Was gibt’s Neues?</h2>
+          <form id="postForm">
+            <textarea id="postText" maxlength="280" placeholder="Schreibe einen Beitrag … (max. 280 Zeichen)"></textarea>
+            <div class="row wrap">
+              <label class="btn secondary file-label" for="postImage">Bild hinzufügen</label>
+              <input id="postImage" class="file-input" type="file" accept="image/jpeg,image/png,image/webp">
+              <span id="postImageName" class="status">Kein Bild ausgewählt</span>
+              <span id="charCount" class="status">0 / 280</span>
+              <button id="postSubmit" class="btn" type="submit">Veröffentlichen</button>
+            </div>
+            <p id="postStatus" class="status" aria-live="polite"></p>
+          </form>
+        </section>
+        <div id="feedStatus" class="feed-status">Lade Nova …</div>
+        <div id="feed"></div>
+      </section>
+
+      <section id="profileView" class="hidden">
+        <div id="profileHeader" class="profile-header"></div>
+        <div id="profilePosts"></div>
+      </section>
+
+      <section id="accountView" class="hidden">
+        <div class="profile-header">
+          <h2>Mein Konto</h2>
+          <div id="accountPreview"></div>
+          <form id="profileForm">
+            <label for="editUsername">Benutzername</label>
+            <input id="editUsername" minlength="3" maxlength="24" required>
+            <label for="editBio">Biografie</label>
+            <textarea id="editBio" maxlength="160" placeholder="Erzähl etwas über dich …"></textarea>
+            <label class="btn secondary file-label" for="avatarFile">Profilbild ändern</label>
+            <input id="avatarFile" class="file-input" type="file" accept="image/jpeg,image/png,image/webp">
+            <p id="avatarStatus" class="status">Profilbild: JPG, PNG oder WebP, max. 2 MB.</p>
+            <button id="saveProfile" class="btn" type="submit">Profil speichern</button>
+            <p id="profileStatus" class="status" aria-live="polite"></p>
+          </form>
         </div>
-      </form>
-      <p id="postStatus" class="status" aria-live="polite">Melde dich an, um etwas zu posten.</p>
-    </section>
-
-    <section aria-label="Timeline">
-      <div id="feedStatus">Beiträge werden geladen …</div>
-      <div id="feed"></div>
-    </section>
-
-    <footer>
-      Nova Social · Teile respektvoll und schütze deine privaten Daten.<br>
-      *Der Feed lädt beim Öffnen und Aktualisieren; Live-Aktualisierung kann später ergänzt werden.
-    </footer>
-  </main>
-
-  <aside class="rightbar">
-    <div class="box">
-      <h2>Über Nova</h2>
-      <p>Ein Ort, um Gedanken zu teilen, Menschen zu entdecken und Gespräche zu starten.</p>
-    </div>
-    <div class="box">
-      <h2>Dein Konto</h2>
-      <p id="rightAccount">Melde dich an, um Beiträge zu veröffentlichen und zu liken.</p>
-      <a href="#account" class="btn secondary small">Anmelden</a>
-    </div>
-    <div class="box">
-      <h2>Gut zu wissen</h2>
-      <p>Veröffentliche keine Passwörter, Adressen oder andere private Informationen. Öffentliche Posts können von anderen gesehen werden.</p>
-    </div>
-  </aside>
-</div>
-
-<nav class="bottom-nav" aria-label="Mobile Navigation">
-  <a href="#home">⌂<span>Feed</span></a>
-  <a href="#compose">✎<span>Posten</span></a>
-  <a href="#account">◎<span>Konto</span></a>
-</nav>
-
-<script type="module">
-import { createClient } from
-  'https://esm.sh/@supabase/supabase-js@2';
-
-// Trage hier die URL und den Publishable Key deines Projekts ein.
-const SUPABASE_URL = 'https://ykxtcimsxmpmftlhzgyp.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_rdgP2E0Gh70RSqzmpL3Qvw_UeAB0kXL';
-
-const configured =
-  SUPABASE_URL.startsWith('https://') &&
-  !SUPABASE_KEY.includes('DEIN_PUBLISHABLE_KEY');
-
-const db = configured
-  ? createClient(SUPABASE_URL, SUPABASE_KEY)
-  : null;
-
-let currentUser = null;
-let authMode = 'signup';
-
-const $ = id => document.getElementById(id);
-const feed = $('feed');
-
-function status(id, text, error = false) {
-  $(id).textContent = text;
-  $(id).style.color = error ? '#fb929c' : '';
-}
-
-function node(tag, cls, text) {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text !== undefined) n.textContent = text;
-  return n;
-}
-
-function setAuthUI() {
-  const signedIn = !!currentUser;
-  $('authForm').classList.toggle('hidden', signedIn);
-  $('logout').classList.toggle('hidden', !signedIn);
-  $('forgotPassword').classList.toggle('hidden', signedIn);
-
-  $('authHeading').textContent = signedIn
-    ? 'Dein Konto'
-    : 'Willkommen bei Nova';
-
-  $('sideAccount').textContent = signedIn
-    ? '@' + (currentUser.user_metadata?.username || currentUser.email)
-    : 'Nicht angemeldet';
-
-  $('rightAccount').textContent = signedIn
-    ? 'Angemeldet als @' + (currentUser.user_metadata?.username || currentUser.email)
-    : 'Melde dich an, um Beiträge zu veröffentlichen und zu liken.';
-
-  $('postText').disabled = !signedIn;
-  $('postSubmit').disabled = !signedIn;
-
-  status('postStatus', signedIn
-    ? 'Dein Beitrag ist auf 280 Zeichen begrenzt.'
-    : 'Melde dich an, um etwas zu posten.');
-}
-
-
-
-
-function renderUsername(profile) {
-  const name = document.createElement('span');
-  name.className = 'username';
-  name.textContent = profile.username || 'Unbekannt';
-
-  if (profile.verified === true) {
-    const badge = document.createElement('span');
-    badge.className = 'verified-badge';
-    badge.textContent = '✓';
-    badge.title = 'Verifiziert';
-    name.appendChild(badge);
-  }
-
-  return name;
-}
-
-function formatDate(value) {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '' :
-    d.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-async function loadFeed() {
-  if (!db) {
-    $('feedStatus').textContent =
-      'Bitte trage zuerst deine Supabase-URL und deinen Publishable Key im Code ein.';
-    return;
-  }
-
-  $('reload').disabled = true;
-  $('feedStatus').textContent = 'Beiträge werden geladen …';
-
-  try {
-    const { data, error } = await db
-      .from('posts')
-      .select('id, user_id, content, created_at, profiles!posts_user_id_fkey(username), likes(user_id)')
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error) throw error;
-
-    feed.replaceChildren();
-    $('feedStatus').textContent = data.length
-      ? 'Die neuesten Beiträge'
-      : 'Noch keine Beiträge. Sei der Erste!';
-
-    for (const post of data) {
-      const card = node('article', 'post');
-      const head = node('div', 'post-head');
-      const username = post.profiles?.username || 'user';
-      const avatar = node('div', 'avatar', username.slice(0, 1).toUpperCase());
-      const meta = node('div', 'post-meta');
-
-      meta.append(
-        node('div', 'username', '@' + username),
-        node('div', 'date', formatDate(post.created_at))
-      );
-
-      head.append(avatar, meta);
-      card.append(head);
-      card.append(node('div', 'post-content', post.content));
-
-      const actions = node('div', 'post-actions');
-      const likes = post.likes || [];
-      const liked = currentUser && likes.some(x => x.user_id === currentUser.id);
-
-      const likeButton = node('button', 'action' + (liked ? ' liked' : ''),
-        (liked ? '♥' : '♡') + ' ' + likes.length);
-
-      likeButton.type = 'button';
-      likeButton.setAttribute('aria-label', liked ? 'Like entfernen' : 'Beitrag liken');
-      likeButton.addEventListener('click', () => toggleLike(post.id, !!liked));
-      actions.append(likeButton);
-
-      if (currentUser?.id === post.user_id) {
-        const del = node('button', 'action delete', 'Löschen');
-        del.type = 'button';
-        del.addEventListener('click', () => deletePost(post.id));
-        actions.append(del);
-      }
-
-      card.append(actions);
-      feed.append(card);
-    }
-  } catch (e) {
-    console.error(e);
-    $('feedStatus').textContent =
-      'Feed konnte nicht geladen werden. Prüfe Tabellen, Fremdschlüssel und RLS-Regeln.';
-  } finally {
-    $('reload').disabled = false;
-  }
-}
-
-$('switchAuth').addEventListener('click', () => {
-  authMode = authMode === 'signup' ? 'login' : 'signup';
-
-  $('authHeading').textContent =
-    authMode === 'signup' ? 'Konto erstellen' : 'Willkommen zurück';
-
-  $('authSubmit').textContent =
-    authMode === 'signup' ? 'Registrieren' : 'Anmelden';
-
-  $('switchAuth').textContent =
-    authMode === 'signup' ? 'Ich habe ein Konto' : 'Neues Konto erstellen';
-
-  $('username').classList.toggle('hidden', authMode === 'login');
-  $('username').required = authMode === 'signup';
-
-  $('password').autocomplete =
-    authMode === 'signup' ? 'new-password' : 'current-password';
-
-  status('authStatus', '');
-});
-
-// NEU: Passwort-Zurücksetzen-E-Mail versenden
-$('forgotPassword').addEventListener('click', async () => {
-  if (!db) {
-    return status(
-      'authStatus',
-      'Bitte konfiguriere zuerst deine Supabase-URL und deinen Publishable Key.',
-      true
-    );
-  }
-
-  const email = $('email').value.trim();
-
-  if (!email) {
-    $('email').focus();
-    return status(
-      'authStatus',
-      'Gib zuerst deine E-Mail-Adresse ein.',
-      true
-    );
-  }
-
-  const button = $('forgotPassword');
-  button.disabled = true;
-  status('authStatus', 'Reset-E-Mail wird angefordert …');
-
-  try {
-    const { error } = await db.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/reset-password.html'
-    });
-
-    if (error) throw error;
-
-    status(
-      'authStatus',
-      'Falls für diese Adresse ein Konto besteht, erhältst du eine E-Mail mit einem Link zum Zurücksetzen des Passworts.'
-    );
-  } catch (e) {
-    console.error(e);
-    status(
-      'authStatus',
-      'Die Anfrage konnte nicht gesendet werden. Prüfe deine Supabase-Einstellungen.',
-      true
-    );
-  } finally {
-    button.disabled = false;
-  }
-});
-
-$('authForm').addEventListener('submit', async event => {
-  event.preventDefault();
-
-  if (!db) {
-    return status('authStatus', 'Bitte zuerst Supabase konfigurieren.', true);
-  }
-
-  const email = $('email').value.trim();
-  const password = $('password').value;
-  const username = $('username').value.trim().toLowerCase();
-  const submit = $('authSubmit');
-
-  if (authMode === 'signup' && !/^[a-z0-9_]{3,24}$/.test(username)) {
-    return status('authStatus',
-      'Benutzername: 3–24 Zeichen, nur a–z, 0–9 und Unterstrich.', true);
-  }
-
-  submit.disabled = true;
-  status('authStatus', 'Einen Moment …');
-
-  try {
-    if (authMode === 'signup') {
-      const { data, error } = await db.auth.signUp({
-        email,
-        password,
-        options: { data: { username } }
-      });
-
-      if (error) throw error;
-
-      if (data.session) {
-        currentUser = data.user;
-        status('authStatus', 'Konto erstellt. Du bist angemeldet.');
-      } else {
-        status('authStatus',
-          'Registrierung gestartet. Bestätige deine E-Mail, falls die Bestätigung aktiviert ist.');
-      }
-    } else {
-      const { data, error } = await db.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-
-      currentUser = data.user;
-      status('authStatus', 'Erfolgreich angemeldet.');
-    }
-
-    setAuthUI();
-    await loadFeed();
-  } catch (e) {
-    console.error(e);
-    status('authStatus', e.message || 'Anmeldung fehlgeschlagen.', true);
-  } finally {
-    submit.disabled = false;
-  }
-});
-
-$('logout').addEventListener('click', async () => {
-  if (!db) return;
-
-  const { error } = await db.auth.signOut();
-
-  if (error) return status('authStatus', error.message, true);
-
-  currentUser = null;
-  setAuthUI();
-  await loadFeed();
-  status('authStatus', 'Du wurdest abgemeldet.');
-});
-
-$('postText').addEventListener('input', () => {
-  $('charCount').textContent = $('postText').value.length + ' / 280';
-});
-
-$('postForm').addEventListener('submit', async event => {
-  event.preventDefault();
-
-  if (!db || !currentUser) {
-    return status('postStatus', 'Bitte melde dich zuerst an.', true);
-  }
-
-  const content = $('postText').value.trim();
-
-  if (!content || content.length > 280) {
-    return status('postStatus', 'Bitte gib einen Text mit 1–280 Zeichen ein.', true);
-  }
-
-  $('postSubmit').disabled = true;
-  status('postStatus', 'Beitrag wird veröffentlicht …');
-
-  try {
-    const { error } = await db.from('posts').insert({
-      user_id: currentUser.id,
-      content
-    });
-
-    if (error) throw error;
-
-    $('postText').value = '';
-    $('charCount').textContent = '0 / 280';
-    status('postStatus', 'Beitrag veröffentlicht!');
-    await loadFeed();
-  } catch (e) {
-    console.error(e);
-    status('postStatus', e.message || 'Veröffentlichen fehlgeschlagen.', true);
-  } finally {
-    $('postSubmit').disabled = !currentUser;
-  }
-});
-
-async function toggleLike(postId, alreadyLiked) {
-  if (!currentUser) {
-    return status('postStatus', 'Zum Liken musst du angemeldet sein.', true);
-  }
-
-  try {
-    const result = alreadyLiked
-      ? await db.from('likes').delete()
-          .eq('post_id', postId).eq('user_id', currentUser.id)
-      : await db.from('likes').insert({
-          post_id: postId,
-          user_id: currentUser.id
-        });
-
-    if (result.error) throw result.error;
-    await loadFeed();
-  } catch (e) {
-    console.error(e);
-    status('postStatus', e.message || 'Like konnte nicht gespeichert werden.', true);
-  }
-}
-
-async function deletePost(postId) {
-  if (!currentUser || !confirm('Möchtest du diesen Beitrag wirklich löschen?')) return;
-
-  try {
-    const { error } = await db.from('posts').delete()
-      .eq('id', postId).eq('user_id', currentUser.id);
-
-    if (error) throw error;
-    await loadFeed();
-  } catch (e) {
-    console.error(e);
-    status('postStatus', e.message || 'Löschen fehlgeschlagen.', true);
-  }
-}
-
-$('reload').addEventListener('click', loadFeed);
-
-async function start() {
-  if (!db) {
-    setAuthUI();
-    $('feedStatus').textContent =
-      'Setup nötig: Supabase-URL und Publishable Key eintragen.';
-    return;
-  }
-
-  const { data } = await db.auth.getSession();
-  currentUser = data.session?.user || null;
-  setAuthUI();
-  await loadFeed();
-
-  db.auth.onAuthStateChange((_event, session) => {
-    currentUser = session?.user || null;
-    setAuthUI();
-    loadFeed();
-  });
-}
-
-start();
-</script>
+        <div class="panel">
+          <h2>Deine Beiträge</h2>
+          <div id="myPosts"></div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="rightbar">
+      <div class="box">
+        <h2>Willkommen bei Nova</h2>
+        <p>Teile Gedanken, entdecke Profile und folge anderen Mitgliedern.</p>
+      </div>
+      <div class="box">
+        <h2>Info</h2>
+        <p>Dein Profil und deine Beiträge sind öffentlich, wenn deine Supabase-Richtlinien das erlauben.</p>
+      </div>
+    </aside>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="#home">⌂<span>Start</span></a>
+    <a href="#account">◉<span>Konto</span></a>
+  </nav>
+
+  <script type="module" src="app.js"></script>
 </body>
 </html>
