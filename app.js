@@ -1,38 +1,55 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Supabase: Project URL und Publishable Key
-// Niemals einen sb_secret_- oder service_role-Key im Browser verwenden.
+// Supabase-Konfiguration
 const SUPABASE_URL = 'https://ykxtcimsxmpmftlhzgyp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_rdgP2E0Gh70RSqzmpL3Qvw_UeAB0kXL';
 
-const configured =
-  SUPABASE_URL.startsWith('https://') &&
-  SUPABASE_KEY.startsWith('sb_publishable_');
-
-const db = configured
-  ? createClient(SUPABASE_URL, SUPABASE_KEY)
-  : null;
-
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 
 let currentUser = null;
 let authMode = 'signup';
 let route = 'home';
 let routeValue = '';
+let selectedPostImage = null;
+let selectedAvatar = null;
 
-function setStatus(id, text, error = false) {
-  const element = $(id);
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = error ? '#fb929c' : '';
+// Verhindert, dass ältere Ladevorgänge neuere überschreiben.
+let feedLoadId = 0;
+let profileLoadId = 0;
+let accountLoadId = 0;
+
+// Verhindert doppelte Initialisierung.
+let appStarted = false;
+
+// Hilfsfunktionen
+function el(tag, cls = '', text = '') {
+  const node = document.createElement(tag);
+
+  if (cls) node.className = cls;
+  if (text !== '') node.textContent = text;
+
+  return node;
 }
 
-function el(tag, cls = '', text = '') {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text !== '') n.textContent = text;
-  return n;
+function status(id, message, error = false) {
+  const node = $(id);
+
+  if (!node) return;
+
+  node.textContent = message || '';
+  node.style.color = error ? '#fb929c' : '';
+}
+
+function dateText(value) {
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleString('de-DE', {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      });
 }
 
 function usernameOf(user) {
@@ -41,59 +58,77 @@ function usernameOf(user) {
     'user';
 }
 
-function dateText(value) {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime())
-    ? ''
-    : d.toLocaleString('de-DE', {
-        dateStyle: 'medium',
-        timeStyle: 'short'
-      });
-}
-
 function makeAvatar(url, name, big = false) {
-  const a = el('div', 'avatar' + (big ? ' big' : ''));
+  const avatar = el('div', 'avatar' + (big ? ' big' : ''));
 
   if (url) {
     const img = document.createElement('img');
+
     img.src = url;
-    img.alt = 'Profilbild von ' + name;
-    a.append(img);
+    img.alt = 'Profilbild von ' + (name || 'Nutzer');
+
+    avatar.append(img);
   } else {
-    a.textContent = (name || '?').slice(0, 1).toUpperCase();
+    avatar.textContent = (name || '?').slice(0, 1).toUpperCase();
   }
 
-  return a;
+  return avatar;
 }
 
-// Rendert einen Namen mit blauem Haken, falls das Profil verified=true hat.
-function renderUsername(profile) {
-  const wrapper = el('span', 'username');
-
-  const name = document.createElement('span');
-  name.textContent = profile?.username || 'Unbekannt';
-  wrapper.appendChild(name);
+// Verifizierungsabzeichen
+function badges(profile) {
+  const result = el('span', 'badge-group');
 
   if (profile?.verified === true) {
     const badge = el('span', 'verified-badge', '✓');
+
     badge.title = 'Verifiziert';
-    badge.setAttribute('aria-label', 'Verifiziert');
-    wrapper.appendChild(badge);
+    badge.setAttribute('aria-label', 'Blau verifiziert');
+
+    result.append(badge);
   }
 
-  return wrapper;
+  if (profile?.red_verified === true) {
+    const badge = el('span', 'red-badge', '✓');
+
+    badge.title = 'Besonderes Profil';
+    badge.setAttribute('aria-label', 'Roter Haken');
+
+    result.append(badge);
+  }
+
+  return result;
 }
 
-// Rendert Text sicher und macht @Namen und #Hashtags anklickbar.
+// Username mit Link zum Profil
+function nameLink(profile, prefix = '@') {
+  const name = profile?.username || 'user';
+  const link = el('a', 'username');
+
+  link.href = '#profile/' + encodeURIComponent(name);
+
+  link.append(
+    document.createTextNode(prefix + name),
+    badges(profile)
+  );
+
+  return link;
+}
+
+// Hashtags und Erwähnungen anklickbar machen
 function richText(container, text) {
   const re = /(^|\s)(#[\p{L}\p{N}_]+|@[\p{L}\p{N}_]+)/gu;
+
   let last = 0;
   let match;
+
+  text = text || '';
 
   while ((match = re.exec(text)) !== null) {
     container.append(
       document.createTextNode(text.slice(last, match.index))
     );
+
     container.append(document.createTextNode(match[1]));
 
     const token = match[2];
@@ -104,23 +139,19 @@ function richText(container, text) {
       : '#profile/' + encodeURIComponent(token.slice(1).toLowerCase());
 
     container.append(link);
+
     last = re.lastIndex;
   }
 
   container.append(document.createTextNode(text.slice(last)));
 }
 
-function setAuthUI() {
+// Navigation
+function showRouteSections() {
   const signedIn = !!currentUser;
 
-  $('authForm').classList.toggle('hidden', signedIn);
+  $('authPanel').classList.toggle('hidden', signedIn);
   $('logout').classList.toggle('hidden', !signedIn);
-
-  $('authHeading').textContent = signedIn
-    ? 'Du bist angemeldet'
-    : authMode === 'signup'
-      ? 'Willkommen bei Nova'
-      : 'Willkommen zurück';
 
   $('sideAccount').textContent = signedIn
     ? '@' + usernameOf(currentUser)
@@ -131,577 +162,13 @@ function setAuthUI() {
     !signedIn || !['home', 'compose'].includes(route)
   );
 
-  $('profileEditor').classList.toggle(
-    'hidden',
-    !signedIn || route !== 'account'
-  );
-
-  if (signedIn && route === 'account') {
-    loadMyProfile();
-  }
-}
-
-function setRoute() {
-  let hash;
-
-  try {
-    hash = decodeURIComponent(location.hash || '#home');
-  } catch {
-    hash = location.hash || '#home';
-  }
-
-  const parts = hash.slice(1).split('/');
-  route = parts[0] || 'home';
-  routeValue = parts.slice(1).join('/');
-
-  if (!['home', 'compose', 'account', 'profile', 'hashtag'].includes(route)) {
-    route = 'home';
-  }
-
-  $('authPanel').classList.toggle('hidden', route !== 'account');
-
   $('feedSection').classList.toggle(
     'hidden',
     !['home', 'compose', 'hashtag'].includes(route)
   );
 
   $('profileView').classList.toggle('hidden', route !== 'profile');
-
-  $('pageTitle').textContent = ({
-    home: 'Für dich',
-    compose: 'Beitrag schreiben',
-    account: 'Mein Konto',
-    profile: 'Profil',
-    hashtag: '#' + routeValue
-  })[route] || 'Nova';
-
-  document.querySelectorAll('.nav a').forEach(a => {
-    a.classList.toggle('active', a.dataset.route === route);
-  });
-
-  setAuthUI();
-
-  if (!db) {
-    $('feedStatus').textContent =
-      'Setup nötig: Supabase Project URL und Publishable Key in app.js eintragen.';
-    return;
-  }
-
-  if (route === 'profile') {
-    loadProfilePage(routeValue);
-  } else if (['home', 'compose', 'hashtag'].includes(route)) {
-    loadFeed();
-  }
-}
-
-// Passwort zurücksetzen
-const forgotPasswordButton = $('forgot-password');
-
-if (forgotPasswordButton) {
-  forgotPasswordButton.addEventListener('click', async () => {
-    if (!db) {
-      alert('Supabase ist noch nicht eingerichtet.');
-      return;
-    }
-
-    const email = prompt(
-      'Gib deine registrierte E-Mail-Adresse ein:'
-    );
-
-    if (!email?.trim()) return;
-
-    forgotPasswordButton.disabled = true;
-
-    try {
-      const { error } = await db.auth.resetPasswordForEmail(
-        email.trim(),
-        {
-          redirectTo:
-            window.location.origin + '/reset-password.html'
-        }
-      );
-
-      if (error) throw error;
-
-      alert(
-        'Falls für diese Adresse ein Konto besteht, erhältst du eine E-Mail zum Zurücksetzen des Passworts.'
-      );
-    } catch (e) {
-      console.error(e);
-      alert(
-        'Fehler beim Zurücksetzen: ' +
-        (e.message || 'Bitte Supabase-Einstellungen prüfen.')
-      );
-    } finally {
-      forgotPasswordButton.disabled = false;
-    }
-  });
-}
-
-async function loadMyProfile() {
-  if (!db || !currentUser) return;
-
-  const { data, error } = await db
-    .from('profiles')
-    .select('username, avatar_url')
-    .eq('id', currentUser.id)
-    .maybeSingle();
-
-  if (error) {
-    return setStatus('profileStatus', error.message, true);
-  }
-
-  const oldAvatar = $('myAvatar');
-  const newAvatar = makeAvatar(
-    data?.avatar_url,
-    data?.username || usernameOf(currentUser),
-    true
-  );
-
-  newAvatar.id = 'myAvatar';
-  oldAvatar.replaceWith(newAvatar);
-
-  setStatus(
-    'profileStatus',
-    data?.username
-      ? '@' + data.username
-      : 'Profil wird eingerichtet.'
-  );
-}
-
-async function uploadAvatar(file) {
-  if (!db || !currentUser || !file) return;
-
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    return setStatus(
-      'profileStatus',
-      'Bitte JPG, PNG oder WebP auswählen.',
-      true
-    );
-  }
-
-  if (file.size > 2 * 1024 * 1024) {
-    return setStatus(
-      'profileStatus',
-      'Das Bild darf maximal 2 MB groß sein.',
-      true
-    );
-  }
-
-  setStatus('profileStatus', 'Bild wird hochgeladen …');
-
-  const ext = {
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/webp': 'webp'
-  }[file.type];
-
-  const path =
-    currentUser.id + '/' + crypto.randomUUID() + '.' + ext;
-
-  try {
-    const { error: uploadError } = await db.storage
-      .from('avatars')
-      .upload(path, file, {
-        contentType: file.type,
-        upsert: false
-      });
-
-    if (uploadError) throw uploadError;
-
-    const { data: urlData } = db.storage
-      .from('avatars')
-      .getPublicUrl(path);
-
-    const { error: saveError } = await db
-      .from('profiles')
-      .update({ avatar_url: urlData.publicUrl })
-      .eq('id', currentUser.id);
-
-    if (saveError) throw saveError;
-
-    setStatus('profileStatus', 'Profilbild gespeichert.');
-    await loadMyProfile();
-    await loadFeed();
-  } catch (e) {
-    console.error(e);
-    setStatus(
-      'profileStatus',
-      e.message || 'Upload fehlgeschlagen.',
-      true
-    );
-  }
-}
-
-$('fileInput').addEventListener('change', e => {
-  uploadAvatar(e.target.files?.[0]);
-});
-
-async function loadFeed() {
-  if (!db) return;
-
-  $('reload').disabled = true;
-  $('feedStatus').textContent = 'Beiträge werden geladen …';
-
-  try {
-    const { data, error } = await db
-      .from('posts')
-      .select(
-        'id,user_id,content,created_at,profiles!posts_user_id_fkey(username,avatar_url,verified),likes(user_id)'
-      )
-      .order('created_at', { ascending: false })
-      .limit(100);
-
-    if (error) throw error;
-
-    let posts = data || [];
-
-    if (route === 'hashtag') {
-      const needle = '#' + routeValue.toLowerCase();
-
-      posts = posts.filter(p =>
-        (p.content || '').toLowerCase().includes(needle)
-      );
-
-      $('feedStatus').textContent = posts.length
-        ? 'Beiträge mit ' + needle
-        : 'Noch keine Beiträge mit ' + needle;
-    } else {
-      $('feedStatus').textContent = posts.length
-        ? 'Die neuesten Beiträge'
-        : 'Noch keine Beiträge. Sei der Erste!';
-    }
-
-    $('feed').replaceChildren();
-
-    for (const post of posts) {
-      $('feed').append(await buildPost(post));
-    }
-  } catch (e) {
-    console.error(e);
-    $('feedStatus').textContent =
-      'Feed-Fehler: ' +
-      (e.message || 'Bitte Tabellen, Fremdschlüssel und RLS prüfen.');
-  } finally {
-    $('reload').disabled = false;
-  }
-}
-
-async function buildPost(post) {
-  const card = el('article', 'post');
-  const profile = post.profiles || {};
-  const name = profile.username || 'user';
-
-  const head = el('div', 'post-head');
-  const av = makeAvatar(profile.avatar_url, name);
-
-  av.style.cursor = 'pointer';
-  av.addEventListener('click', () => {
-    location.hash = '#profile/' + encodeURIComponent(name);
-  });
-
-  const meta = el('div', 'post-meta');
-
-  const userLink = el('a', 'username');
-  userLink.href = '#profile/' + encodeURIComponent(name);
-  userLink.append(document.createTextNode('@'));
-  userLink.append(renderUsername(profile));
-
-  meta.append(userLink, el('div', 'date', dateText(post.created_at)));
-  head.append(av, meta);
-  card.append(head);
-
-  const content = el('div', 'post-content');
-  richText(content, post.content || '');
-  card.append(content);
-
-  const actions = el('div', 'post-actions');
-  const likes = post.likes || [];
-  const liked = !!currentUser &&
-    likes.some(x => x.user_id === currentUser.id);
-
-  const like = el(
-    'button',
-    'action' + (liked ? ' liked' : ''),
-    (liked ? '♥' : '♡') + ' ' + likes.length
-  );
-
-  like.type = 'button';
-  like.addEventListener('click', () => toggleLike(post.id, liked));
-
-  const replyButton = el('button', 'action', '💬 Antworten');
-  replyButton.type = 'button';
-
-  actions.append(like, replyButton);
-
-  if (currentUser?.id === post.user_id) {
-    const del = el('button', 'action delete', 'Löschen');
-    del.type = 'button';
-    del.addEventListener('click', () => deletePost(post.id));
-    actions.append(del);
-  }
-
-  card.append(actions);
-
-  const replyArea = el('div', 'reply-area hidden');
-
-  replyButton.addEventListener('click', async () => {
-    const opening = replyArea.classList.contains('hidden');
-    replyArea.classList.toggle('hidden');
-
-    if (opening) {
-      await loadReplies(post.id, replyArea);
-    }
-  });
-
-  card.append(replyArea);
-  return card;
-}
-
-async function loadReplies(postId, area) {
-  area.replaceChildren(
-    el('p', 'status', 'Antworten werden geladen …')
-  );
-
-  try {
-    const { data, error } = await db
-      .from('replies')
-      .select(
-        'id,user_id,content,created_at,profiles!replies_user_id_fkey(username,avatar_url,verified)'
-      )
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
-
-    area.replaceChildren();
-
-    if (!data?.length) {
-      area.append(el('p', 'status', 'Noch keine Antworten.'));
-    }
-
-    for (const reply of data || []) {
-      const item = el('div', 'reply');
-      const profile = reply.profiles || {};
-      const name = profile.username || 'user';
-
-      const link = el('a', 'rich-link');
-      link.href = '#profile/' + encodeURIComponent(name);
-      link.append(document.createTextNode('@'));
-      link.append(renderUsername(profile));
-
-      item.append(
-        link,
-        el('div', 'date', dateText(reply.created_at))
-      );
-
-      const text = el('div');
-      richText(text, reply.content || '');
-      item.append(text);
-
-      if (currentUser?.id === reply.user_id) {
-        const del = el('button', 'action', 'Antwort löschen');
-        del.type = 'button';
-
-        del.addEventListener('click', async () => {
-          const { error: deleteError } = await db
-            .from('replies')
-            .delete()
-            .eq('id', reply.id)
-            .eq('user_id', currentUser.id);
-
-          if (deleteError) {
-            alert(deleteError.message);
-          } else {
-            await loadReplies(postId, area);
-          }
-        });
-
-        item.append(del);
-      }
-
-      area.append(item);
-    }
-
-    if (currentUser) {
-      const form = el('form');
-      const input = el('textarea');
-
-      input.rows = 2;
-      input.maxLength = 280;
-      input.required = true;
-      input.placeholder = 'Schreibe eine Antwort …';
-
-      const submit = el('button', 'btn small', 'Antworten');
-      submit.type = 'submit';
-
-      form.append(input, submit);
-
-      form.addEventListener('submit', async e => {
-        e.preventDefault();
-
-        const content = input.value.trim();
-        if (!content) return;
-
-        submit.disabled = true;
-
-        const { error: insertError } = await db
-          .from('replies')
-          .insert({
-            post_id: postId,
-            user_id: currentUser.id,
-            content
-          });
-
-        submit.disabled = false;
-
-        if (insertError) {
-          return alert(
-            'Antwort fehlgeschlagen: ' + insertError.message
-          );
-        }
-
-        await loadReplies(postId, area);
-      });
-
-      area.append(form);
-    } else {
-      area.append(
-        el('p', 'status', 'Melde dich an, um zu antworten.')
-      );
-    }
-  } catch (e) {
-    console.error(e);
-    area.replaceChildren(
-      el(
-        'p',
-        'status',
-        'Antworten konnten nicht geladen werden: ' + e.message
-      )
-    );
-  }
-}
-
-async function loadProfilePage(username) {
-  $('profileHeader').replaceChildren();
-  $('profilePosts').replaceChildren();
-
-  try {
-    const { data: profile, error } = await db
-      .from('profiles')
-      .select('id,username,avatar_url,created_at,verified')
-      .eq('username', username)
-      .maybeSingle();
-
-    if (error) throw error;
-
-    if (!profile) {
-      $('profileHeader').textContent = 'Profil nicht gefunden.';
-      return;
-    }
-
-    const row = el('div', 'profile-details');
-
-    row.append(
-      makeAvatar(profile.avatar_url, profile.username, true)
-    );
-
-    const details = el('div');
-    const profileName = el('h2');
-
-    profileName.append(document.createTextNode('@'));
-    profileName.append(renderUsername(profile));
-
-    details.append(
-      profileName,
-      el(
-        'p',
-        'status',
-        'Mitglied seit ' + dateText(profile.created_at)
-      )
-    );
-
-    row.append(details);
-
-    $('profileHeader').append(
-      row,
-      el('p', 'status', 'Beiträge von @' + profile.username)
-    );
-
-    const { data: posts, error: postsError } = await db
-      .from('posts')
-      .select(
-        'id,user_id,content,created_at,profiles!posts_user_id_fkey(username,avatar_url,verified),likes(user_id)'
-      )
-      .eq('user_id', profile.id)
-      .order('created_at', { ascending: false })
-      .limit(100);
-
-    if (postsError) throw postsError;
-
-    if (!posts?.length) {
-      $('profilePosts').append(
-        el('p', 'status', 'Noch keine Beiträge.')
-      );
-    }
-
-    for (const post of posts || []) {
-      $('profilePosts').append(await buildPost(post));
-    }
-  } catch (e) {
-    console.error(e);
-    $('profileHeader').textContent =
-      'Profil konnte nicht geladen werden: ' + e.message;
-  }
-}
-
-async function toggleLike(postId, liked) {
-  if (!currentUser) {
-    return alert('Zum Liken musst du angemeldet sein.');
-  }
-
-  const result = liked
-    ? await db.from('likes')
-        .delete()
-        .eq('post_id', postId)
-        .eq('user_id', currentUser.id)
-    : await db.from('likes')
-        .insert({
-          post_id: postId,
-          user_id: currentUser.id
-        });
-
-  if (result.error) {
-    alert(result.error.message);
-  } else if (route === 'profile') {
-    await loadProfilePage(routeValue);
-  } else {
-    await loadFeed();
-  }
-}
-
-async function deletePost(id) {
-  if (!currentUser || !confirm('Diesen Beitrag wirklich löschen?')) {
-    return;
-  }
-
-  const { error } = await db
-    .from('posts')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', currentUser.id);
-
-  if (error) {
-    alert(error.message);
-  } else if (route === 'profile') {
-    await loadProfilePage(routeValue);
-  } else {
-    await loadFeed();
-  }
-}
-
-$('switchAuth').addEventListener('click', () => {
-  authMode = authMode === 'signup' ? 'login' : 'signup';
+  $('accountView').classList.toggle('hidden', route !== 'account');
 
   $('authHeading').textContent = authMode === 'signup'
     ? 'Willkommen bei Nova'
@@ -718,23 +185,818 @@ $('switchAuth').addEventListener('click', () => {
   $('username').classList.toggle('hidden', authMode === 'login');
   $('username').required = authMode === 'signup';
 
-  $('password').autocomplete = authMode === 'signup'
-    ? 'new-password'
-    : 'current-password';
+  $('pageTitle').textContent = ({
+    home: 'Für dich',
+    compose: 'Beitrag schreiben',
+    account: 'Mein Konto',
+    profile: 'Profil',
+    hashtag: '#' + routeValue
+  })[route] || 'Nova';
 
-  setStatus('authStatus', '');
+  document.querySelectorAll('.nav a').forEach(a => {
+    a.classList.toggle('active', a.dataset.route === route);
+  });
+}
+
+function setRoute() {
+  let raw = location.hash || '#home';
+
+  try {
+    raw = decodeURIComponent(raw);
+  } catch {}
+
+  const parts = raw.slice(1).split('/');
+
+  route = parts[0] || 'home';
+  routeValue = parts.slice(1).join('/');
+
+  if (!['home', 'compose', 'account', 'profile', 'hashtag'].includes(route)) {
+    route = 'home';
+  }
+
+  showRouteSections();
+
+  if (route === 'profile') {
+    loadProfilePage(routeValue);
+  } else if (route === 'account') {
+    loadMyAccount();
+  } else if (['home', 'compose', 'hashtag'].includes(route)) {
+    loadFeed();
+  }
+}
+
+// Bilder hochladen
+async function uploadImage(file, bucket, folder) {
+  if (!file) return null;
+
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('Bitte JPG, PNG oder WebP auswählen.');
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('Das Bild darf maximal 5 MB groß sein.');
+  }
+
+  const ext = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp'
+  }[file.type];
+
+  const path = `${folder}/${crypto.randomUUID()}.${ext}`;
+
+  const { error } = await db.storage
+    .from(bucket)
+    .upload(path, file, {
+      contentType: file.type,
+      upsert: false
+    });
+
+  if (error) throw error;
+
+  return db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
+// Posts anhand ihrer Datenbank-ID deduplizieren
+function uniquePosts(posts) {
+  const seen = new Set();
+
+  return (posts || []).filter(post => {
+    if (!post || post.id == null || seen.has(post.id)) {
+      return false;
+    }
+
+    seen.add(post.id);
+    return true;
+  });
+}
+
+// FEED LADEN
+async function loadFeed() {
+  const loadId = ++feedLoadId;
+
+  $('reload').disabled = true;
+  status('feedStatus', 'Beiträge werden geladen …');
+
+  try {
+    const { data, error } = await db
+      .from('posts')
+      .select(
+        'id,user_id,content,image_url,created_at,' +
+        'profiles!posts_user_id_fkey(id,username,avatar_url,verified,red_verified),' +
+        'likes(user_id)'
+      )
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+
+    // Ältere Ladevorgänge ignorieren.
+    if (loadId !== feedLoadId) return;
+
+    let posts = uniquePosts(data);
+
+    if (route === 'hashtag') {
+      posts = posts.filter(post =>
+        (post.content || '')
+          .toLowerCase()
+          .includes('#' + routeValue.toLowerCase())
+      );
+    }
+
+    const feed = $('feed');
+    const fragment = document.createDocumentFragment();
+
+    status(
+      'feedStatus',
+      posts.length ? 'Die neuesten Beiträge' : 'Noch keine Beiträge.'
+    );
+
+    for (const post of posts) {
+      if (loadId !== feedLoadId) return;
+
+      const card = await buildPost(post);
+
+      if (loadId !== feedLoadId) return;
+
+      fragment.append(card);
+    }
+
+    // Erst vollständig gerenderte Ergebnisse einsetzen.
+    if (loadId === feedLoadId) {
+      feed.replaceChildren(fragment);
+    }
+  } catch (e) {
+    if (loadId === feedLoadId) {
+      console.error(e);
+      status('feedStatus', 'Feed-Fehler: ' + e.message, true);
+    }
+  } finally {
+    if (loadId === feedLoadId) {
+      $('reload').disabled = false;
+    }
+  }
+}
+
+// Einzelnen Beitrag erstellen
+async function buildPost(post) {
+  const profile = post.profiles || {};
+  const card = el('article', 'post');
+
+  // Eindeutige ID für spätere Fehlersuche.
+  card.dataset.postId = String(post.id);
+
+  const head = el('div', 'post-head');
+  const avatar = makeAvatar(profile.avatar_url, profile.username);
+
+  avatar.style.cursor = 'pointer';
+
+  avatar.addEventListener('click', () => {
+    location.hash = '#profile/' +
+      encodeURIComponent(profile.username || 'user');
+  });
+
+  const meta = el('div', 'post-meta');
+
+  meta.append(
+    nameLink(profile),
+    el('div', 'date', dateText(post.created_at))
+  );
+
+  head.append(avatar, meta);
+  card.append(head);
+
+  if (post.content) {
+    const content = el('div', 'post-content');
+
+    richText(content, post.content);
+    card.append(content);
+  }
+
+  if (post.image_url) {
+    const image = document.createElement('img');
+
+    image.className = 'post-image';
+    image.src = post.image_url;
+    image.alt = 'Bild in einem Nova-Beitrag';
+    image.loading = 'lazy';
+
+    card.append(image);
+  }
+
+  const actions = el('div', 'post-actions');
+  const likes = post.likes || [];
+
+  const liked = !!currentUser &&
+    likes.some(item => item.user_id === currentUser.id);
+
+  const like = el(
+    'button',
+    'action' + (liked ? ' liked' : ''),
+    (liked ? '♥' : '♡') + ' ' + likes.length
+  );
+
+  like.type = 'button';
+
+  like.addEventListener('click', () => {
+    toggleLike(post.id, liked);
+  });
+
+  actions.append(like);
+
+  const followCount = await countFollowers(profile.id);
+
+  if (profile.id && currentUser && profile.id !== currentUser.id) {
+    const following = await isFollowing(profile.id);
+
+    const follow = el(
+      'button',
+      'action',
+      following ? '✓ Folge ich' : '+ Folgen'
+    );
+
+    follow.type = 'button';
+
+    follow.addEventListener('click', async () => {
+      follow.disabled = true;
+
+      try {
+        if (following) {
+          const { error } = await db
+            .from('follows')
+            .delete()
+            .eq('follower_id', currentUser.id)
+            .eq('following_id', profile.id);
+
+          if (error) throw error;
+        } else {
+          const { error } = await db
+            .from('follows')
+            .insert({
+              follower_id: currentUser.id,
+              following_id: profile.id
+            });
+
+          if (error) throw error;
+        }
+
+        setRoute();
+      } catch (e) {
+        alert('Folgen fehlgeschlagen: ' + e.message);
+        follow.disabled = false;
+      }
+    });
+
+    actions.append(follow);
+  }
+
+  actions.append(el('span', 'status', followCount + ' Follower'));
+
+  if (currentUser?.id === post.user_id) {
+    const del = el('button', 'action delete', 'Löschen');
+
+    del.type = 'button';
+    del.addEventListener('click', () => deletePost(post.id));
+
+    actions.append(del);
+  }
+
+  card.append(actions);
+
+  return card;
+}
+
+// Follower zählen
+async function countFollowers(userId) {
+  if (!userId) return 0;
+
+  const { count, error } = await db
+    .from('follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('following_id', userId);
+
+  if (error) {
+    console.warn(error.message);
+    return 0;
+  }
+
+  return count || 0;
+}
+
+async function countFollowing(userId) {
+  if (!userId) return 0;
+
+  const { count, error } = await db
+    .from('follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('follower_id', userId);
+
+  if (error) {
+    console.warn(error.message);
+    return 0;
+  }
+
+  return count || 0;
+}
+
+async function isFollowing(userId) {
+  if (!currentUser || !userId) return false;
+
+  const { data, error } = await db
+    .from('follows')
+    .select('follower_id')
+    .eq('follower_id', currentUser.id)
+    .eq('following_id', userId)
+    .maybeSingle();
+
+  return !error && !!data;
+}
+
+// PROFILSEITE LADEN – gegen mehrfache Aufrufe abgesichert
+async function loadProfilePage(username) {
+  const loadId = ++profileLoadId;
+
+  $('profileHeader').replaceChildren();
+  $('profilePosts').replaceChildren();
+
+  try {
+    const { data: profile, error } = await db
+      .from('profiles')
+      .select(
+        'id,username,avatar_url,bio,created_at,verified,red_verified'
+      )
+      .eq('username', username)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    // Veraltete Profilanfragen nicht rendern.
+    if (loadId !== profileLoadId) return;
+
+    if (!profile) {
+      $('profileHeader').textContent = 'Profil nicht gefunden.';
+      return;
+    }
+
+    const header = el('div', 'profile-header');
+    const cover = el('div', 'profile-cover');
+
+    cover.append(makeAvatar(profile.avatar_url, profile.username, true));
+
+    const details = el('div');
+    const title = el('h2');
+
+    title.append(
+      document.createTextNode('@' + profile.username),
+      badges(profile)
+    );
+
+    details.append(title);
+
+    details.append(
+      el('p', 'profile-bio', profile.bio || 'Keine Biografie angegeben.')
+    );
+
+    details.append(
+      el('p', 'status', 'Mitglied seit ' + dateText(profile.created_at))
+    );
+
+    cover.append(details);
+    header.append(cover);
+
+    const followers = await countFollowers(profile.id);
+    const followingCount = await countFollowing(profile.id);
+
+    if (loadId !== profileLoadId) return;
+
+    const stats = el('div', 'profile-stats');
+    const f = el('span');
+
+    f.append(el('strong', '', String(followers)), ' Follower');
+
+    const g = el('span');
+
+    g.append(el('strong', '', String(followingCount)), ' Folgt');
+
+    stats.append(f, g);
+    header.append(stats);
+
+    if (currentUser && currentUser.id !== profile.id) {
+      const isOn = await isFollowing(profile.id);
+
+      if (loadId !== profileLoadId) return;
+
+      const btn = el(
+        'button',
+        'btn secondary',
+        isOn ? '✓ Folge ich' : 'Folgen'
+      );
+
+      btn.type = 'button';
+
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+
+        try {
+          const result = isOn
+            ? await db
+                .from('follows')
+                .delete()
+                .eq('follower_id', currentUser.id)
+                .eq('following_id', profile.id)
+            : await db
+                .from('follows')
+                .insert({
+                  follower_id: currentUser.id,
+                  following_id: profile.id
+                });
+
+          if (result.error) throw result.error;
+
+          // Neu laden, damit der Button den aktuellen Status zeigt.
+          if (loadId === profileLoadId) {
+            await loadProfilePage(username);
+          }
+        } catch (e) {
+          alert(e.message);
+          btn.disabled = false;
+        }
+      });
+
+      header.append(btn);
+    }
+
+    if (loadId !== profileLoadId) return;
+
+    $('profileHeader').replaceChildren(header);
+
+    const { data: posts, error: postError } = await db
+      .from('posts')
+      .select(
+        'id,user_id,content,image_url,created_at,' +
+        'profiles!posts_user_id_fkey(id,username,avatar_url,verified,red_verified),' +
+        'likes(user_id)'
+      )
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (postError) throw postError;
+
+    if (loadId !== profileLoadId) return;
+
+    const postsUnique = uniquePosts(posts);
+    const fragment = document.createDocumentFragment();
+
+    if (!postsUnique.length) {
+      fragment.append(el('p', 'feed-status', 'Noch keine Beiträge.'));
+    } else {
+      for (const post of postsUnique) {
+        if (loadId !== profileLoadId) return;
+
+        const card = await buildPost(post);
+
+        if (loadId !== profileLoadId) return;
+
+        fragment.append(card);
+      }
+    }
+
+    // Nur der neueste Ladevorgang darf die Posts einsetzen.
+    if (loadId === profileLoadId) {
+      $('profilePosts').replaceChildren(fragment);
+    }
+  } catch (e) {
+    if (loadId !== profileLoadId) return;
+
+    console.error(e);
+
+    $('profileHeader').textContent =
+      'Profil konnte nicht geladen werden: ' + e.message;
+  }
+}
+
+// MEIN KONTO LADEN – gegen mehrfache Aufrufe abgesichert
+async function loadMyAccount() {
+  const loadId = ++accountLoadId;
+
+  $('accountPreview').replaceChildren();
+  $('myPosts').replaceChildren();
+
+  if (!currentUser) {
+    $('accountPreview').append(
+      el('p', 'status', 'Bitte melde dich an, um dein Konto zu bearbeiten.')
+    );
+
+    $('profileForm').classList.add('hidden');
+    return;
+  }
+
+  const userId = currentUser.id;
+
+  $('profileForm').classList.remove('hidden');
+
+  try {
+    const { data: profile, error } = await db
+      .from('profiles')
+      .select(
+        'id,username,avatar_url,bio,created_at,verified,red_verified'
+      )
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (loadId !== accountLoadId) return;
+
+    if (!profile) {
+      throw new Error(
+        'Profil fehlt. Prüfe, ob das SQL-Setup ausgeführt wurde.'
+      );
+    }
+
+    $('editUsername').value = profile.username || usernameOf(currentUser);
+    $('editBio').value = profile.bio || '';
+
+    const summary = el('div', 'profile-details');
+
+    summary.append(makeAvatar(profile.avatar_url, profile.username, true));
+
+    const info = el('div');
+    const title = el('h2');
+
+    title.append(
+      document.createTextNode('@' + profile.username),
+      badges(profile)
+    );
+
+    info.append(
+      title,
+      el('p', 'profile-bio', profile.bio || 'Keine Biografie angegeben.')
+    );
+
+    summary.append(info);
+
+    if (loadId !== accountLoadId) return;
+
+    $('accountPreview').replaceChildren(summary);
+
+    const { data: posts, error: postError } = await db
+      .from('posts')
+      .select(
+        'id,user_id,content,image_url,created_at,' +
+        'profiles!posts_user_id_fkey(id,username,avatar_url,verified,red_verified),' +
+        'likes(user_id)'
+      )
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (postError) throw postError;
+
+    if (loadId !== accountLoadId) return;
+
+    const postsUnique = uniquePosts(posts);
+    const fragment = document.createDocumentFragment();
+
+    if (!postsUnique.length) {
+      fragment.append(el('p', 'status', 'Du hast noch keine Beiträge.'));
+    } else {
+      for (const post of postsUnique) {
+        if (loadId !== accountLoadId) return;
+
+        const card = await buildPost(post);
+
+        if (loadId !== accountLoadId) return;
+
+        fragment.append(card);
+      }
+    }
+
+    if (loadId === accountLoadId) {
+      $('myPosts').replaceChildren(fragment);
+    }
+  } catch (e) {
+    if (loadId !== accountLoadId) return;
+
+    console.error(e);
+    status('profileStatus', e.message, true);
+  }
+}
+
+// Profilbild auswählen
+$('avatarFile').addEventListener('change', e => {
+  selectedAvatar = e.target.files?.[0] || null;
+
+  status(
+    'avatarStatus',
+    selectedAvatar
+      ? selectedAvatar.name + ' ausgewählt'
+      : 'Profilbild: JPG, PNG oder WebP, max. 2 MB.'
+  );
 });
 
-$('authForm').addEventListener('submit', async e => {
+// Profil speichern
+$('profileForm').addEventListener('submit', async e => {
   e.preventDefault();
 
-  if (!db) {
-    return setStatus(
-      'authStatus',
-      'Bitte Supabase-URL und Publishable Key eintragen.',
+  if (!currentUser) return;
+
+  const username = $('editUsername').value.trim().toLowerCase();
+  const bio = $('editBio').value.trim();
+
+  if (!/^[a-z0-9_]{3,24}$/.test(username)) {
+    return status(
+      'profileStatus',
+      'Benutzername: 3–24 Zeichen, nur a–z, 0–9 und _.',
       true
     );
   }
+
+  $('saveProfile').disabled = true;
+
+  try {
+    let avatar_url;
+
+    if (selectedAvatar) {
+      avatar_url = await uploadImage(
+        selectedAvatar,
+        'avatars',
+        currentUser.id
+      );
+    }
+
+    const changes = { username, bio };
+
+    if (avatar_url) {
+      changes.avatar_url = avatar_url;
+    }
+
+    const { error } = await db
+      .from('profiles')
+      .update(changes)
+      .eq('id', currentUser.id);
+
+    if (error) throw error;
+
+    const { error: authError } = await db.auth.updateUser({
+      data: { username }
+    });
+
+    if (authError) throw authError;
+
+    selectedAvatar = null;
+    $('avatarFile').value = '';
+
+    status('profileStatus', 'Profil gespeichert.');
+
+    await loadMyAccount();
+  } catch (e) {
+    console.error(e);
+
+    status(
+      'profileStatus',
+      e.message || 'Profil konnte nicht gespeichert werden.',
+      true
+    );
+  } finally {
+    $('saveProfile').disabled = false;
+  }
+});
+
+// Beitragsbild auswählen
+$('postImage').addEventListener('change', e => {
+  selectedPostImage = e.target.files?.[0] || null;
+
+  $('postImageName').textContent = selectedPostImage
+    ? selectedPostImage.name
+    : 'Kein Bild ausgewählt';
+});
+
+$('postText').addEventListener('input', () => {
+  $('charCount').textContent = $('postText').value.length + ' / 280';
+});
+
+// Beitrag veröffentlichen
+$('postForm').addEventListener('submit', async e => {
+  e.preventDefault();
+
+  if (!currentUser) {
+    return status('postStatus', 'Bitte melde dich an.', true);
+  }
+
+  const content = $('postText').value.trim();
+
+  if (!content && !selectedPostImage) {
+    return status(
+      'postStatus',
+      'Schreibe Text oder wähle ein Bild aus.',
+      true
+    );
+  }
+
+  $('postSubmit').disabled = true;
+
+  try {
+    let image_url = null;
+
+    if (selectedPostImage) {
+      image_url = await uploadImage(
+        selectedPostImage,
+        'post-images',
+        currentUser.id
+      );
+    }
+
+    const { error } = await db.from('posts').insert({
+      user_id: currentUser.id,
+      content,
+      image_url
+    });
+
+    if (error) throw error;
+
+    $('postText').value = '';
+    $('postImage').value = '';
+    $('postImageName').textContent = 'Kein Bild ausgewählt';
+    $('charCount').textContent = '0 / 280';
+
+    selectedPostImage = null;
+
+    status('postStatus', 'Beitrag veröffentlicht.');
+
+    if (location.hash !== '#home') {
+      location.hash = '#home';
+    } else {
+      await loadFeed();
+    }
+  } catch (e) {
+    console.error(e);
+
+    status(
+      'postStatus',
+      e.message || 'Beitrag konnte nicht veröffentlicht werden.',
+      true
+    );
+  } finally {
+    $('postSubmit').disabled = false;
+  }
+});
+
+// Beitrag liken oder Like entfernen
+async function toggleLike(postId, liked) {
+  if (!currentUser) {
+    return alert('Zum Liken musst du angemeldet sein.');
+  }
+
+  const result = liked
+    ? await db
+        .from('likes')
+        .delete()
+        .eq('post_id', postId)
+        .eq('user_id', currentUser.id)
+    : await db.from('likes').insert({
+        post_id: postId,
+        user_id: currentUser.id
+      });
+
+  if (result.error) {
+    alert(result.error.message);
+  } else {
+    setRoute();
+  }
+}
+
+// Beitrag löschen
+async function deletePost(id) {
+  if (!currentUser || !confirm('Diesen Beitrag wirklich löschen?')) {
+    return;
+  }
+
+  const { error } = await db
+    .from('posts')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', currentUser.id);
+
+  if (error) {
+    alert(error.message);
+  } else {
+    setRoute();
+  }
+}
+
+// Anmeldung / Registrierung umschalten
+$('switchAuth').addEventListener('click', () => {
+  authMode = authMode === 'signup' ? 'login' : 'signup';
+
+  showRouteSections();
+  status('authStatus', '');
+});
+
+// Anmeldung und Registrierung
+$('authForm').addEventListener('submit', async e => {
+  e.preventDefault();
 
   const email = $('email').value.trim();
   const password = $('password').value;
@@ -744,7 +1006,7 @@ $('authForm').addEventListener('submit', async e => {
     authMode === 'signup' &&
     !/^[a-z0-9_]{3,24}$/.test(username)
   ) {
-    return setStatus(
+    return status(
       'authStatus',
       'Benutzername: 3–24 Zeichen, nur a–z, 0–9 und _.',
       true
@@ -758,35 +1020,28 @@ $('authForm').addEventListener('submit', async e => {
       ? await db.auth.signUp({
           email,
           password,
-          options: {
-            data: { username }
-          }
+          options: { data: { username } }
         })
-      : await db.auth.signInWithPassword({
-          email,
-          password
-        });
+      : await db.auth.signInWithPassword({ email, password });
 
     if (result.error) throw result.error;
 
     currentUser = result.data.user;
 
     if (authMode === 'signup' && !result.data.session) {
-      setStatus(
+      status(
         'authStatus',
-        'Konto erstellt. Bitte prüfe deine E-Mail, falls Bestätigung aktiviert ist.'
+        'Konto erstellt. Bitte bestätige deine E-Mail, falls verlangt.'
       );
     } else {
-      setStatus('authStatus', 'Erfolgreich angemeldet.');
+      status('authStatus', 'Erfolgreich angemeldet.');
     }
 
-    setAuthUI();
-    location.hash = '#home';
-    await loadFeed();
+    setRoute();
   } catch (e) {
-    setStatus(
+    status(
       'authStatus',
-      e.message || 'Registrierung fehlgeschlagen.',
+      e.message || 'Anmeldung fehlgeschlagen.',
       true
     );
   } finally {
@@ -794,100 +1049,77 @@ $('authForm').addEventListener('submit', async e => {
   }
 });
 
-$('logout').addEventListener('click', async () => {
-  if (!db) return;
+// Passwort zurücksetzen
+$('forgot-password').addEventListener('click', async () => {
+  const email = prompt('Gib deine registrierte E-Mail-Adresse ein:');
 
+  if (!email?.trim()) return;
+
+  try {
+    const { error } = await db.auth.resetPasswordForEmail(
+      email.trim(),
+      {
+        redirectTo: window.location.origin + '/reset-password.html'
+      }
+    );
+
+    if (error) throw error;
+
+    alert(
+      'Falls ein Konto mit dieser Adresse besteht, erhältst du eine E-Mail zum Zurücksetzen.'
+    );
+  } catch (e) {
+    alert('Fehler: ' + e.message);
+  }
+});
+
+// Abmelden
+$('logout').addEventListener('click', async () => {
   const { error } = await db.auth.signOut();
 
   if (error) {
-    return setStatus('authStatus', error.message, true);
+    return status('authStatus', error.message, true);
   }
 
   currentUser = null;
-  setAuthUI();
-  location.hash = '#home';
-  await loadFeed();
-});
 
-$('postText').addEventListener('input', () => {
-  $('charCount').textContent =
-    $('postText').value.length + ' / 280';
-});
-
-$('postForm').addEventListener('submit', async e => {
-  e.preventDefault();
-
-  if (!currentUser) {
-    return setStatus('postStatus', 'Bitte melde dich an.', true);
-  }
-
-  const content = $('postText').value.trim();
-
-  if (!content || content.length > 280) {
-    return setStatus(
-      'postStatus',
-      'Bitte 1–280 Zeichen eingeben.',
-      true
-    );
-  }
-
-  $('postSubmit').disabled = true;
-
-  const { error } = await db
-    .from('posts')
-    .insert({
-      user_id: currentUser.id,
-      content
-    });
-
-  $('postSubmit').disabled = false;
-
-  if (error) {
-    return setStatus('postStatus', error.message, true);
-  }
-
-  $('postText').value = '';
-  $('charCount').textContent = '0 / 280';
-
-  setStatus('postStatus', 'Beitrag veröffentlicht!');
+  // Noch laufende Profil- und Feed-Aufrufe ungültig machen.
+  feedLoadId++;
+  profileLoadId++;
+  accountLoadId++;
 
   location.hash = '#home';
-  await loadFeed();
+  setRoute();
 });
 
-$('reload').addEventListener('click', () => {
-  if (route === 'profile') {
-    loadProfilePage(routeValue);
-  } else {
-    loadFeed();
-  }
-});
+// Feed manuell neu laden
+$('reload').addEventListener('click', setRoute);
 
+// Navigation über Hash-Links
 window.addEventListener('hashchange', setRoute);
 
+// App starten
 async function start() {
-  if (!db) {
-    $('feedStatus').textContent =
-      'Setup nötig: Supabase Project URL und Publishable Key in app.js eintragen.';
-    setAuthUI();
-    return;
-  }
+  if (appStarted) return;
+
+  appStarted = true;
 
   const { data, error } = await db.auth.getSession();
 
-  if (error) {
-    console.error(error);
-  }
+  if (error) console.error(error);
 
   currentUser = data?.session?.user || null;
 
-  setAuthUI();
-
   db.auth.onAuthStateChange((_event, session) => {
     currentUser = session?.user || null;
-    setAuthUI();
 
-    if (['home', 'compose', 'hashtag'].includes(route)) {
+    showRouteSections();
+
+    if (route === 'account') {
+      loadMyAccount();
+    } else if (route === 'profile') {
+      loadProfilePage(routeValue);
+    } else {
       loadFeed();
     }
   });
